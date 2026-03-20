@@ -30,7 +30,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.ref }}
 
       - name: Sync repository to VM
-        uses: Burnett01/rsync-deployments
+        uses: Burnett01/rsync-deployments@v8
         with:
           switches: >-
             -avz
@@ -45,7 +45,7 @@ jobs:
           remote_key: ${{ secrets.SSH_KEY }}
 
       - name: Prepare sensitive files and bring up containers
-        uses: appleboy/ssh-action
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -57,7 +57,7 @@ jobs:
             bash ci/run.sh
 
       - name: Verify deployment
-        uses: appleboy/ssh-action
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
