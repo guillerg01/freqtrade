@@ -1,0 +1,68 @@
+name: VM Docker deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch or tag) to deploy'
+        required: false
+        default: ''
+        type: string
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: vm-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.ref }}
+
+      - name: Sync repository to VM
+        uses: Burnett01/rsync-deployments
+        with:
+          switches: >-
+            -avz
+            --delete
+            --exclude='.git/'
+            --exclude='user_data/'
+            --filter=P_user_data/
+          path: ./
+          remote_path: ~/bot/main/
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_key: ${{ secrets.SSH_KEY }}
+
+      - name: Prepare sensitive files and bring up containers
+        uses: appleboy/ssh-action
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/bot/main
+            bash ci/prepare.sh
+            bash ci/run.sh
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/bot/main
+            bash ci/verify-deploy.sh
