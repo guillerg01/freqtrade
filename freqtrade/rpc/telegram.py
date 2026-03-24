@@ -163,6 +163,12 @@ class Telegram(RPCHandler):
         self._thread = Thread(target=self._init, name="FTTelegram")
         self._thread.start()
 
+    def _init(self) -> None:
+        """
+        Runs the async telegram loop in a separate thread.
+        """
+        asyncio.run(self._run_loop())
+
     def _init_keyboard(self) -> None:
         """
         Validates the keyboard configuration from telegram config
@@ -247,18 +253,15 @@ class Telegram(RPCHandler):
     def _init_telegram_app(self):
         return Application.builder().token(self._config["telegram"]["token"]).build()
 
-    def _init(self) -> None:
+    async def _run_loop(self) -> None:
         """
+        Async entry point for the Telegram polling loop.
         Initializes this module with the given config,
         registers all known command handlers
-        and starts polling for message updates
-        Runs in a separate thread.
+        and starts polling for message updates.
+        Runs inside asyncio.run() in a separate thread.
         """
-        try:
-            self._loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
+        self._loop = asyncio.get_running_loop()
 
         self._app = self._init_telegram_app()
 
@@ -340,7 +343,7 @@ class Telegram(RPCHandler):
             "rpc.telegram is listening for following commands: %s",
             [[x for x in sorted(h.commands)] for h in handles],
         )
-        self._loop.run_until_complete(self._startup_telegram())
+        await self._startup_telegram()
 
     async def _startup_telegram(self) -> None:
         retries = 3
@@ -381,8 +384,8 @@ class Telegram(RPCHandler):
         Stops all running telegram threads.
         :return: None
         """
-        # This can take up to `timeout` from the call to `start_polling`.
-        asyncio.run_coroutine_threadsafe(self._cleanup_telegram(), self._loop)
+        if hasattr(self, "_loop") and not self._loop.is_closed():
+            asyncio.run_coroutine_threadsafe(self._cleanup_telegram(), self._loop)
         self._thread.join()
 
     def _exchange_from_msg(self, msg: RPCOrderMsg) -> str:
